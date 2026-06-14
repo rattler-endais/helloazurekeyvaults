@@ -309,7 +309,16 @@ Microsoft [indica](https://learn.microsoft.com/en-us/cli/azure/authenticate-azur
 
 
 ## Acceso al secreto desde python
+### Paso 1.
+Microsoft [documenta](https://learn.microsoft.com/en-us/python/api/overview/azure/identity-readme?view=azure-python) el uso de DefaultAzureCredential y SecretClient para autenticarse y consumir secretos de Key Vault
 
+Instalar dependencias
+
+```shell
+pip install azure-identity azure-keyvault-secrets
+```
+
+---
 
 ## Acceso al secreto desde ansible
 
