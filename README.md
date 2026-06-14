@@ -113,9 +113,10 @@ az keyvault create \
     - RBAC para permisos modernos,
     - purge protection para evitar borrado permanente prematuro
 
-[ ] Markar como completado
+[ ] Marcar como completado
 
 ## Paso 2. Crear el secreto
 
 
-[ ] Markar como completado
+[ ] Marcar como completado
+
