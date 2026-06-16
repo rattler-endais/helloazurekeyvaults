@@ -219,6 +219,8 @@ Y ahora que lo has descargado, almacenalo en lugar seguro.
 
 Aunque el SP tenga un rol “Reader” sobre el resource group, eso no le da acceso al valor de los secretos. Para leer secretos necesitas un rol de plano de datos del Key Vault, por ejemplo Key Vault Secrets User.
 
+**NOTA**: En un entorno de producción será habitual rotar de forma periódica el certificado. Consulta la sección de Anexo para saber cómo realizarlo
+
 [ ] Marcar como completado
 
 
@@ -336,18 +338,144 @@ En el directorio python del repositorio se proporcionan varios scripts de python
 
 - **readsecrets_simplev1.py**
 
-Qué hace este script
+Qué hace este script:
 
-usa el certificado local del service principal,
-obtiene un token de Microsoft Entra ID,
-se conecta al vault,
-y recupera el secreto
+- usa el certificado local del service principal,
+- obtiene un token de Microsoft Entra ID,
+- se conecta al vault,
+- y recupera el secreto
 
+Para el correcto funcionamiento de este script debes exportar 3 variables de entorno para especificar el id del Service Principal, el id del tenant de Azure y la ruta al certificado que se usará para iniciar sesión en Azure. Tienes unos ejemplos en los ficheros *env.export_linux.sample* y *env.export_powershell.sample*
 
+- **readsecrets_simplev2.py**
 
+Este es básicamente el mismo script que *readsecrets_simplev1.py* pero tiene como añadido que se muestra la forma de acceder a las propieddes del secreto, por ejemplo para obtener la fecha de expiración del mismo
 
 ---
 
 ## Acceso al secreto desde ansible
+En progreso (regresa en unos dias)
 
 
+## Resumen y recomendaciones
+A continuación se resumen algunas recomendaciones para un entorno enterprise:
+
+- Usar un Key Vault por aplicación y entorno (dev/pre/stage/prod).
+- RBAC como modelo de permisos.
+- Rol "Key Vault Secrets User" para lectura en runtime.
+- Rol "Key Vault Secrets Officer" para el administrador que gestiona los vault (o si la aplicación crea/actualiza secretos en vez de sólo leerlos)
+- Service principal con certificado para servidores on‑prem normales.
+- Purge protection habilitado.
+- Firewall/IP allowlist al principio; Private Endpoint cuando el servicio ya quede estable.
+- Rotación periódica de certificado del SP y de secretos.
+- Logs/alertas de acceso al vault.
+
+
+## Anexo
+### 1- Rotar el certificado
+```shell
+az ad sp credential reset --name <appId>
+```
+
+### 2- Cómo funciona realmente la rotación en Key Vault
+Este es un punto importante que debes entender:
+
+En Key Vault NO sobrescribes un secreto. Cada vez que haces un set:
+
+- se crea una nueva versión
+- las versiones antiguas siguen existiendo
+
+Es decir, el comportamiento es asi:
+```
+db-password-prod
+ ├── v1 (antigua)
+ ├── v2 (rotada)
+ └── v3 (actual)
+ ```
+
+#### 2.1 Rotar un secreto
+
+Caso típico: cambiar una password de BD
+
+Solo tienes que ejecutar:
+
+```shell
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name "db-password-prod" \
+  --value "NuevoPasswordSuperSeguro-2026!"
+```
+Qué ocurre aquí
+
+- No sustituyes el secreto
+- Creas una nueva versión
+- Las apps que usan endpoint sin versión verán automáticamente el nuevo valor
+
+#### 2.2 Ver versiones de un secreto (muy útil para debugging)
+```shell
+az keyvault secret list-versions \
+  --vault-name "$KV_NAME" \
+  --name "db-password-prod" \
+  -o table
+```
+
+#### 2.3 Rotación sin downtime
+Este punto es importante a nivel enterprise, donde se suele producir el siguiente problema clásico:
+
+- Rotas password DB
+- Las apps siguen usando la vieja, por lo que se producen fallos
+
+Solución segura: **"dual secret pattern"**
+
+Microsoft [documenta](https://docs.azure.cn/en-us/key-vault/secrets/tutorial-rotation-dual?tabs=azure-cli) la rotación basada en múltiples versiones sin downtime.
+
+La estrategia es la siguiente:
+
+- Crear nuevo valor (en DB o API)
+- Guardarlo en Key Vault (nueva versión)
+- Reiniciar o refrescar aplicación
+- Validar
+- Eliminar/invalidar el antiguo
+
+
+### 3- Añadir nuevos secretos (mismo service principal)
+**IMPORTANTE:** El service principal NO depende del secreto. Tiene acceso al vault entero (según RBAC)
+
+Crear otro secreto:
+```shell
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name "api-token-fivetran" \
+  --value "token-super-secreto"
+```
+
+Otro ejemplo:
+```shell
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name "ldap-password" \
+  --value "password-ldap"
+```
+
+**¿El mismo SP puede acceder?**
+
+Sí, podrá leer TODOS los secretos del vault. No necesitas tocar nada al añadir secretos nuevos, por lo que en tu código python puedes hacer algo similar a esto para leer varios secretos del vault y almacenanrlos en un diccionario.
+
+```python
+secrets = {
+    "db": client.get_secret("db-password-prod").value,
+    "api": client.get_secret("api-token-fivetran").value,
+    "ldap": client.get_secret("ldap-bind-password").value,
+}
+```
+
+### 4- Definir expiración al crear un secreto
+En los ejemplos anteriores te he mostrado cómo crear/actualizar secretos en el vault, pero adicionalmente, como buena práctica de seguridad podemos establecer una fecha de expiración del secreto. Puedes hacerlo asi:
+
+```shell
+az keyvault secret set \
+  --vault-name "$KV_NAME" \
+  --name "db-password-prod" \
+  --value "xxx" \
+  --expires "2026-12-31T23:59:59Z"
+```
