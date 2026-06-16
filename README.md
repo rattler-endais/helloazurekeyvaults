@@ -309,14 +309,42 @@ Microsoft [indica](https://learn.microsoft.com/en-us/cli/azure/authenticate-azur
 
 
 ## Acceso al secreto desde python
-### Paso 1.
 Microsoft [documenta](https://learn.microsoft.com/en-us/python/api/overview/azure/identity-readme?view=azure-python) el uso de DefaultAzureCredential y SecretClient para autenticarse y consumir secretos de Key Vault
 
-Instalar dependencias
+### Paso 0 (opcional). Creación de entorno virtual de python
+Este paso no es estrictamente necesario pero si recomendable si quieres evitar conflictos de módulos de python y no quieres ensuciar la instalación de python de tu sistema.
 
+Si sueles trabajar con python seguramente ya sabes cómo hacerlo, pero por si acaso te dejo la documentación [aqui](https://docs.python.org/3/library/venv.html)
+
+Una vez creado, no olvides activarlo antes de continuar
+
+### Paso 1. Instalar dependencias
+Tienes dos formas de hacerlo:
+
+  1.  Instalar las librerias cliente de Azure  manualmente indicando sus nombres
 ```shell
 pip install azure-identity azure-keyvault-secrets
 ```
+  2. O usar el fichero requirements.txt proporcionado
+```shell
+pip install -r requirements.txt
+```
+
+### Paso 2. Ejecución de los scripts de ejemplo proporcionados
+En el directorio python del repositorio se proporcionan varios scripts de python que demuestran cómo acceder al secreto almacenado en Azure
+
+
+- **readsecrets_simplev1.py**
+
+Qué hace este script
+
+usa el certificado local del service principal,
+obtiene un token de Microsoft Entra ID,
+se conecta al vault,
+y recupera el secreto
+
+
+
 
 ---
 
